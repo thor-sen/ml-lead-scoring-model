@@ -1,6 +1,6 @@
-# Lead Scoring Model
+# ML Lead Scoring Model
 
-Trains a logistic regression model on synthetic health system data to predict which companies are ideal customer profiles (ICPs), then applies the model to real companies in HubSpot to assign firmographic scores (0-100). Scores are patched back to each company record in HubSpot. The model is trained on synthetic data with rule-based labels — it is fully functional end-to-end but would need real pipeline outcomes to produce production-grade predictions.
+Trains a logistic regression model on firmographic features to score ICP fit, then applies the model to real companies and patches firmographic scores (0-100) back to each company record in HubSpot.
 
 ## Tech Stack
 
@@ -17,6 +17,14 @@ This is the scoring layer. It takes enriched company data (employee count, reven
 
 - **Logistic regression over more complex models** — Binary classification (ICP vs. not) is the right framing for this problem, and logistic regression outputs calibrated probabilities that map cleanly to a 0-100 score. More complex models would overfit on 200 synthetic records.
 - **Stratified synthetic data generation** — Training records are generated in three tiers (small, mid-size, large) with realistic ranges per tier, rather than uniform random across all ranges. This produces a more realistic distribution for the model to learn from.
+
+**15-state cap on one-hot encoding.** Companies are located across many U.S. states, but one-hot encoding every state creates a sparse feature matrix where most states have too few training examples to learn meaningful coefficients. The top 15 states by company count are encoded individually. Everything else rolls up to an "other" bucket. This keeps the feature space compact and prevents overfitting on rare states.
+
+**Scores surfaced as 0-100 rather than raw probabilities.** The model outputs a probability between 0 and 1 internally. On the scoring side, the probability is multiplied by 100 and displayed as an integer. Reps and RevOps people think in hundred-point scales, not decimal probabilities. "87" is more intuitive than "0.87," and the UX matters because the score is surfaced inside HubSpot where non-technical users interact with it.
+
+**Training labels constructed from rules rather than outcomes.** Real closed-won outcomes would be the right training labels, but they weren't available in sufficient volume for this dataset. Instead, labels were constructed from heuristic rules encoding domain knowledge: companies with strong Medicare participation, relevant headcount, and revenue in the target range are labeled positive; companies failing those criteria are labeled negative. This is a bootstrapping approach. The model learns what an ideal customer looks like based on the rules, then scores new companies against that pattern. In production, labels should transition to actual closed-won outcomes as they accumulate, and the model retrained on that data.
+
+**200-record training set sized to available data.** The model trains on 200 companies because that's what was in the HubSpot portal. This is small for machine learning, but sufficient to demonstrate the scoring logic and produce directionally useful scores. Production scale would involve thousands of labeled historical companies, ideally augmented with outcome data from closed deals.
 
 ## How to Run
 
